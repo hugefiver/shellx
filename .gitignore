@@ -1,0 +1,6 @@
+/target
+/vcpkg_installed
+/.vcpkg
+/vcpkg-buildtrees
+/vcpkg-downloads
+/vcpkg-packages

@@ -1,0 +1,13 @@
+[net]
+git-fetch-with-cli = true
+
+[env]
+PKG_CONFIG = { value = "tools/pkg-config.cmd", relative = true, force = true }
+PKG_CONFIG_PATH = { value = "vcpkg_installed/x64-windows/lib/pkgconfig;vcpkg_installed/x64-windows/share/pkgconfig;vcpkg_installed/x64-windows/debug/lib/pkgconfig;vcpkg_installed/x64-windows/debug/share/pkgconfig", relative = true, force = true }
+PKG_CONFIG_LIBDIR = { value = "vcpkg_installed/x64-windows/lib/pkgconfig;vcpkg_installed/x64-windows/share/pkgconfig;vcpkg_installed/x64-windows/debug/lib/pkgconfig;vcpkg_installed/x64-windows/debug/share/pkgconfig", relative = true, force = true }
+VCPKG_DOWNLOADS = { value = "vcpkg-downloads", relative = true, force = true }
+PKG_CONFIG_ALLOW_SYSTEM_CFLAGS = { value = "1", force = true }
+PKG_CONFIG_ALLOW_SYSTEM_LIBS = { value = "1", force = true }
+
+[target.x86_64-pc-windows-msvc]
+runner = "tools/cargo-runner.cmd"
