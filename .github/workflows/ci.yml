@@ -46,23 +46,11 @@ jobs:
           version: 1.0
 
       # === macOS ===
-      - name: Cache Homebrew packages
-        if: runner.os == 'macOS'
-        uses: actions/cache@v4
-        id: cache-brew
-        with:
-          path: |
-            ~/Library/Caches/Homebrew
-            /opt/homebrew/Cellar/gtk4
-            /opt/homebrew/Cellar/libssh2
-            /opt/homebrew/Cellar/openssl@3
-          key: brew-gtk4-libssh2-openssl-${{ runner.os }}-v1
-
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install gtk4 libssh2 openssl pkg-config || true
-          echo "PKG_CONFIG_PATH=$(brew --prefix openssl)/lib/pkgconfig:$(brew --prefix libssh2)/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" >> $GITHUB_ENV
+          brew install gtk4 libssh2 openssl pkg-config
+          echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig:$(brew --prefix libssh2)/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" >> $GITHUB_ENV
 
       # === Windows ===
       - uses: actions/setup-python@v5
