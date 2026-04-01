@@ -1,3 +1,4 @@
+use crate::config::ResolvedTerminalSettings;
 use crate::connection::{ConnectionBackend, ConnectionProfile};
 use crate::ssh;
 use anyhow::{anyhow, Context, Result};
@@ -201,6 +202,14 @@ impl TerminalSessionHandle {
         let terminal = self.terminal.lock().ok()?;
         Some(f(&terminal))
     }
+
+    pub fn with_terminal_mut<F, R>(&self, f: F) -> Option<R>
+    where
+        F: FnOnce(&mut Terminal) -> R,
+    {
+        let mut terminal = self.terminal.lock().ok()?;
+        Some(f(&mut terminal))
+    }
 }
 
 pub fn find_local_shell() -> PathBuf {
@@ -222,7 +231,7 @@ pub fn find_local_shell() -> PathBuf {
     }
 }
 
-pub fn launch_local_session() -> Result<TerminalSessionHandle> {
+pub fn launch_local_session(settings: ResolvedTerminalSettings) -> Result<TerminalSessionHandle> {
     let shell = find_local_shell();
     let shell_name = shell
         .file_name()
@@ -236,10 +245,10 @@ pub fn launch_local_session() -> Result<TerminalSessionHandle> {
     )));
 
     let initial_size = PtySize {
-        rows: 36,
-        cols: 120,
-        pixel_width: 960,
-        pixel_height: 640,
+        rows: settings.initial_rows,
+        cols: settings.initial_cols,
+        pixel_width: settings.initial_cols * 8,
+        pixel_height: settings.initial_rows * 16,
     };
 
     let pty_system = native_pty_system();
@@ -249,6 +258,7 @@ pub fn launch_local_session() -> Result<TerminalSessionHandle> {
 
     let mut cmd = CommandBuilder::new(&shell);
     cmd.cwd(std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+    cmd.env("TERM", &settings.terminal_type);
 
     let child = pair
         .slave
@@ -267,10 +277,14 @@ pub fn launch_local_session() -> Result<TerminalSessionHandle> {
         BackendGuard::System,
         initial_size,
         snapshot,
+        settings,
     )
 }
 
-pub fn launch_session(profile: &ConnectionProfile) -> Result<TerminalSessionHandle> {
+pub fn launch_session(
+    profile: &ConnectionProfile,
+    settings: ResolvedTerminalSettings,
+) -> Result<TerminalSessionHandle> {
     let snapshot = Arc::new(Mutex::new(SessionSnapshot::from_profile(profile)));
 
     let session_parts = create_session_parts(profile, Arc::clone(&snapshot))?;
@@ -281,7 +295,7 @@ pub fn launch_session(profile: &ConnectionProfile) -> Result<TerminalSessionHand
         initial_size,
     } = session_parts;
 
-    start_session_threads(master, child, backend_guard, initial_size, snapshot)
+    start_session_threads(master, child, backend_guard, initial_size, snapshot, settings)
 }
 
 fn start_session_threads(
@@ -290,6 +304,7 @@ fn start_session_threads(
     backend_guard: BackendGuard,
     initial_size: PtySize,
     snapshot: Arc<Mutex<SessionSnapshot>>,
+    settings: ResolvedTerminalSettings,
 ) -> Result<TerminalSessionHandle> {
     let (command_tx, command_rx) = mpsc::channel();
 
@@ -304,7 +319,7 @@ fn start_session_threads(
 
     let terminal = Terminal::new(
         terminal_size(initial_size),
-        Arc::new(RshellTerminalConfig { scrollback: 6_000 }),
+        Arc::new(RshellTerminalConfig { settings }),
         "rsHell",
         env!("CARGO_PKG_VERSION"),
         Box::new(terminal_writer),
@@ -646,16 +661,32 @@ fn pump_wezterm_events(
 
 #[derive(Debug)]
 struct RshellTerminalConfig {
-    scrollback: usize,
+    settings: ResolvedTerminalSettings,
 }
 
 impl TerminalConfiguration for RshellTerminalConfig {
     fn scrollback_size(&self) -> usize {
-        self.scrollback
+        self.settings.scrollback_lines
     }
 
     fn color_palette(&self) -> ColorPalette {
         ColorPalette::default()
+    }
+
+    fn enable_csi_u_key_encoding(&self) -> bool {
+        self.settings.enable_csi_u
+    }
+
+    fn enable_kitty_keyboard(&self) -> bool {
+        self.settings.enable_kitty_keyboard
+    }
+
+    fn enable_kitty_graphics(&self) -> bool {
+        self.settings.enable_kitty_graphics
+    }
+
+    fn enq_answerback(&self) -> String {
+        self.settings.answerback.clone()
     }
 }
 

@@ -1,44 +1,7 @@
-/* rsHell — Fluent UI Dark Theme (Compact) */
+/* rsHell — Theme-adaptive styles */
+/* Terminal area is always dark. App chrome follows GTK theme (light/dark). */
 
-/* ── Window & Root ───────────────────────────────── */
-window {
-    background: #202020;
-    color: #ffffff;
-}
-
-.rshell-root {
-    background: #202020;
-}
-
-/* ── HeaderBar / Toolbar ─────────────────────────── */
-headerbar {
-    background: #2d2d2d;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.0837);
-    box-shadow: none;
-    min-height: 32px;
-    padding: 0 4px;
-}
-
-headerbar button {
-    min-height: 24px;
-    padding: 1px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    color: #d6d6d6;
-    background: transparent;
-    border: 1px solid transparent;
-}
-
-headerbar button:hover {
-    background: rgba(255, 255, 255, 0.0605);
-    color: #ffffff;
-}
-
-headerbar button:active {
-    background: rgba(255, 255, 255, 0.0419);
-    color: #d6d6d6;
-}
-
+/* ── Accent Colors (shared) ──────────────────────── */
 .connect-button {
     background: #60cdff;
     color: #003e5c;
@@ -56,25 +19,37 @@ headerbar button:active {
     color: #003e5c;
 }
 
+/* ── HeaderBar / Toolbar ─────────────────────────── */
+headerbar {
+    box-shadow: none;
+    min-height: 32px;
+    padding: 0 4px;
+}
+
+headerbar button {
+    min-height: 24px;
+    padding: 1px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+}
+
 .toast-label {
-    color: #adadad;
     font-size: 10px;
     padding: 0 4px;
+    opacity: 0.6;
 }
 
 /* ── Sidebar ─────────────────────────────────────── */
 .sidebar {
-    background: #272727;
-    border-right: 1px solid rgba(255, 255, 255, 0.0837);
     padding: 0;
 }
 
 .sidebar-header {
-    color: #adadad;
     font-size: 9px;
     font-weight: 600;
     letter-spacing: 0.08em;
     padding: 6px 8px 2px 8px;
+    opacity: 0.6;
 }
 
 .sidebar-toolbar {
@@ -87,13 +62,6 @@ headerbar button:active {
     padding: 1px 6px;
     border-radius: 3px;
     font-size: 10px;
-    color: #adadad;
-    background: transparent;
-}
-
-.sidebar-toolbar button:hover {
-    background: rgba(255, 255, 255, 0.0605);
-    color: #d6d6d6;
 }
 
 /* ── Connection List ─────────────────────────────── */
@@ -107,7 +75,7 @@ headerbar button:active {
 }
 
 .connection-list row:selected {
-    background: rgba(96, 205, 255, 0.12);
+    background: alpha(@accent_bg_color, 0.2);
 }
 
 .connection-row {
@@ -116,33 +84,32 @@ headerbar button:active {
 }
 
 .connection-name {
-    color: #e0e0e0;
     font-size: 11px;
     font-weight: 600;
 }
 
 .connection-meta {
-    color: #adadad;
     font-size: 9px;
+    opacity: 0.6;
 }
 
 .folder-header {
-    color: #adadad;
     font-size: 9px;
     font-weight: 600;
     letter-spacing: 0.04em;
     padding: 6px 8px 1px 8px;
+    opacity: 0.6;
 }
 
-/* ── Editor Dialog ───────────────────────────────── */
+/* ── Editor / Settings Dialog ────────────────────── */
 .editor-group {
     padding: 8px 12px;
 }
 
 .editor-group label {
-    color: #adadad;
     font-size: 10px;
     margin-top: 2px;
+    opacity: 0.6;
 }
 
 .editor-group entry,
@@ -150,9 +117,6 @@ headerbar button:active {
     min-height: 26px;
     border-radius: 4px;
     font-size: 12px;
-    background: #1f1f1f;
-    color: #ffffff;
-    border: 1px solid rgba(255, 255, 255, 0.0837);
 }
 
 .editor-group entry:focus,
@@ -160,15 +124,11 @@ headerbar button:active {
     border-color: #60cdff;
 }
 
-.editor-dialog {
-    background: #2d2d2d;
-}
-
 /* ── Tab Bar ─────────────────────────────────────── */
 .tab-bar {
     background: #1f1f1f;
     padding: 1px 2px 0 2px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.0419);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .tab-button {
@@ -183,7 +143,7 @@ headerbar button:active {
 }
 
 .tab-button:hover {
-    background: rgba(255, 255, 255, 0.0605);
+    background: rgba(255, 255, 255, 0.06);
     color: #d6d6d6;
 }
 
@@ -203,7 +163,7 @@ headerbar button:active {
 }
 
 .tab-add:hover {
-    background: rgba(255, 255, 255, 0.0605);
+    background: rgba(255, 255, 255, 0.06);
     color: #d6d6d6;
 }
 
@@ -223,11 +183,10 @@ headerbar button:active {
     color: #ff99a4;
 }
 
-/* ── Terminal View ───────────────────────────────── */
+/* ── Terminal View (always dark) ─────────────────── */
 .terminal-view {
     background: #1a1a1a;
     color: #cccccc;
-    padding: 2px 4px;
     font-family: "Cascadia Mono", "JetBrains Mono", "Consolas", monospace;
     font-size: 13px;
 }
@@ -251,7 +210,6 @@ headerbar button:active {
 
 /* ── Paned Separators ────────────────────────────── */
 paned > separator {
-    background: rgba(255, 255, 255, 0.0837);
     min-width: 3px;
     min-height: 3px;
 }
@@ -260,41 +218,28 @@ paned > separator:hover {
     background: rgba(96, 205, 255, 0.5);
 }
 
-/* ── Scrollbar ───────────────────────────────────── */
-scrollbar {
+/* ── Scrollbar (terminal area) ───────────────────── */
+.terminal-container scrollbar {
     background: transparent;
 }
 
-scrollbar slider {
+.terminal-container scrollbar slider {
     background: rgba(255, 255, 255, 0.10);
     border-radius: 999px;
     min-width: 4px;
     min-height: 4px;
 }
 
-scrollbar slider:hover {
+.terminal-container scrollbar slider:hover {
     background: rgba(255, 255, 255, 0.20);
-}
-
-/* ── Global Entry/SpinButton ─────────────────────── */
-entry, spinbutton, passwordentry {
-    background: #1f1f1f;
-    color: #ffffff;
-    border: 1px solid rgba(255, 255, 255, 0.0837);
-    border-radius: 4px;
-}
-
-entry:focus, spinbutton:focus, passwordentry:focus-within {
-    border-color: #60cdff;
 }
 
 /* ── CheckButton ─────────────────────────────────── */
 checkbutton {
-    color: #d6d6d6;
     font-size: 11px;
 }
 
 /* ── Placeholder ─────────────────────────────────── */
 .dim-label {
-    color: #6e6e6e;
+    opacity: 0.4;
 }

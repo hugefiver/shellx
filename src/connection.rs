@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
+use crate::config::TerminalSettings;
+
 pub const DEFAULT_SSH_PORT: u16 = 22;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -64,6 +66,8 @@ pub struct ConnectionProfile {
     pub backend: ConnectionBackend,
     #[serde(default = "default_accept_new_host")]
     pub accept_new_host: bool,
+    #[serde(default, skip_serializing_if = "TerminalSettings::is_empty")]
+    pub terminal: TerminalSettings,
 }
 
 impl ConnectionProfile {
@@ -81,6 +85,7 @@ impl ConnectionProfile {
             note: String::new(),
             backend: ConnectionBackend::SystemOpenSsh,
             accept_new_host: true,
+            terminal: TerminalSettings::default(),
         }
     }
 

@@ -56,6 +56,23 @@ Lock acquisition order (deadlock prevention): **terminal → master → snapshot
   - Targets: linux-x86_64, macos-arm64, windows-x86_64
   - Windows bundles GTK DLLs + glib schemas + gdk-pixbuf loaders via gvsbuild
 - **Windows build prereqs**: gvsbuild (GTK4), vcpkg (OpenSSL, libssh2)
+- **Local build (Windows)**:
+  ```powershell
+  # 1. Install gvsbuild (requires Visual Studio 2022 + Python 3.x)
+  pip install gvsbuild
+  gvsbuild build gtk4 librsvg
+
+  # 2. Set environment for cargo
+  $gtkRoot = "C:\gtk-build\gtk\x64\release"
+  $env:PKG_CONFIG_PATH = "$gtkRoot\lib\pkgconfig"
+  $env:LIB = "$gtkRoot\lib"
+  $env:PATH = "$gtkRoot\bin;$env:PATH"
+
+  # 3. Build & run
+  cargo build
+  cargo run
+  ```
+  gvsbuild output goes to `C:\gtk-build\gtk\x64\release\`. The `bin\`, `lib\`, `lib\pkgconfig\` dirs must be on PATH/LIB/PKG_CONFIG_PATH respectively.
 - **Verify changes**: `cargo check; cargo test --lib; cargo clippy -- -D warnings`
 
 ## Gotchas
@@ -65,5 +82,5 @@ Lock acquisition order (deadlock prevention): **terminal → master → snapshot
 - **GIO suppression**: `main.rs` uses `unsafe { std::env::set_var(...) }` to suppress DBUS/GIO warnings. Required for clean startup.
 - **Pinned dependencies**: `wezterm-term` pinned to git rev `05343b3`. `portable-pty` and `smol` versions pinned by `wezterm-ssh 0.4.0`. `gtk4` version locked by `relm4 0.10.x`.
 - **`RSHELL_SHELL`** env var overrides the default local shell path.
-- **`app.rs` is monolithic** (~1600 lines): all UI state, message handling, widget construction, and layout logic in one file.
+- **`app.rs` is monolithic** (~2300 lines): all UI state, message handling, widget construction, and layout logic in one file.
 - **No integration tests**: `cargo test --lib` only. Examples are for manual GTK testing.
