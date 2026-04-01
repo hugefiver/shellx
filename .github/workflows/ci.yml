@@ -94,6 +94,17 @@ jobs:
           echo "$gtkRoot\bin" >> $env:GITHUB_PATH
           echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
 
+          # gvsbuild produces zlib1.lib / zlib.lib, but pkg-config emits -lz
+          # which MSVC linker translates to z.lib — create alias if missing
+          $libDir = "$gtkRoot\lib"
+          if (-not (Test-Path "$libDir\z.lib")) {
+            if (Test-Path "$libDir\zlib1.lib") {
+              Copy-Item "$libDir\zlib1.lib" "$libDir\z.lib"
+            } elseif (Test-Path "$libDir\zlib.lib") {
+              Copy-Item "$libDir\zlib.lib" "$libDir\z.lib"
+            }
+          }
+
       - uses: Swatinem/rust-cache@v2
 
       - run: cargo check
