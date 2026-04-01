@@ -68,6 +68,7 @@ jobs:
         with:
           path: C:\gtk-build
           key: gvsbuild-${{ env.GVSBUILD_VERSION }}-gtk4
+          save-always: true
 
       - name: Build GTK4 via gvsbuild
         if: runner.os == 'Windows' && steps.cache-gtk.outputs.cache-hit != 'true'
@@ -82,6 +83,7 @@ jobs:
         with:
           path: C:\vcpkg\installed
           key: vcpkg-openssl${{ env.VCPKG_OPENSSL_VERSION }}-libssh2${{ env.VCPKG_LIBSSH2_VERSION }}-x64-static-md
+          save-always: true
 
       - name: Install OpenSSL and libssh2 (Windows)
         if: runner.os == 'Windows' && steps.cache-vcpkg.outputs.cache-hit != 'true'
@@ -97,6 +99,17 @@ jobs:
           echo "$gtkRoot\bin" >> $env:GITHUB_PATH
           echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
 
+          # gvsbuild produces zlib1.lib / zlib.lib, but pkg-config emits -lz
+          # which MSVC linker translates to z.lib — create alias if missing
+          $libDir = "$gtkRoot\lib"
+          if (-not (Test-Path "$libDir\z.lib")) {
+            if (Test-Path "$libDir\zlib1.lib") {
+              Copy-Item "$libDir\zlib1.lib" "$libDir\z.lib"
+            } elseif (Test-Path "$libDir\zlib.lib") {
+              Copy-Item "$libDir\zlib.lib" "$libDir\z.lib"
+            }
+          }
+
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
@@ -108,17 +121,17 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           cd target/${{ matrix.target }}/release
-          tar czf ../../../shellx-${{ matrix.target }}.tar.gz shellx
+          tar czf ../../../rshell-${{ matrix.target }}.tar.gz rshell
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $dist = "shellx-${{ matrix.target }}"
+          $dist = "rshell-${{ matrix.target }}"
           $gtkRoot = "C:\gtk-build\gtk\x64\release"
           New-Item -ItemType Directory -Force -Path $dist | Out-Null
 
-          Copy-Item "target\${{ matrix.target }}\release\shellx.exe" $dist
+          Copy-Item "target\${{ matrix.target }}\release\rshell.exe" $dist
 
           Get-ChildItem "$gtkRoot\bin\*.dll" | Copy-Item -Destination $dist
 
@@ -137,21 +150,21 @@ jobs:
             Copy-Item "$gtkRoot\lib\gdk-pixbuf-2.0\*" $pixbuf -Recurse
           }
 
-          Compress-Archive -Path "$dist\*" -DestinationPath "shellx-${{ matrix.target }}.zip"
+          Compress-Archive -Path "$dist\*" -DestinationPath "rshell-${{ matrix.target }}.zip"
 
       - name: Upload artifact (Unix)
         if: runner.os != 'Windows'
         uses: actions/upload-artifact@v4
         with:
-          name: shellx-${{ matrix.target }}
-          path: shellx-${{ matrix.target }}.tar.gz
+          name: rshell-${{ matrix.target }}
+          path: rshell-${{ matrix.target }}.tar.gz
 
       - name: Upload artifact (Windows)
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
-          name: shellx-${{ matrix.target }}
-          path: shellx-${{ matrix.target }}.zip
+          name: rshell-${{ matrix.target }}
+          path: rshell-${{ matrix.target }}.zip
 
   release:
     name: Release
@@ -166,7 +179,7 @@ jobs:
           merge-multiple: true
 
       - name: List artifacts
-        run: ls -la shellx-*
+        run: ls -la rshell-*
 
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
@@ -174,8 +187,8 @@ jobs:
         with:
           generate_release_notes: true
           files: |
-            shellx-*.tar.gz
-            shellx-*.zip
+            rshell-*.tar.gz
+            rshell-*.zip
 
       - name: Update Nightly
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
@@ -185,6 +198,6 @@ jobs:
             --title "Nightly Build" \
             --notes "Automated build from master ($(date -u +'%Y-%m-%d %H:%M UTC')). May be unstable." \
             --prerelease \
-            shellx-*.tar.gz shellx-*.zip
+            rshell-*.tar.gz rshell-*.zip
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
