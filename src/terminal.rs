@@ -670,7 +670,7 @@ impl TerminalConfiguration for RshellTerminalConfig {
     }
 
     fn color_palette(&self) -> ColorPalette {
-        ColorPalette::default()
+        self.settings.color_scheme.build_palette()
     }
 
     fn enable_csi_u_key_encoding(&self) -> bool {

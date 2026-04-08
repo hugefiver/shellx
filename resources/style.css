@@ -1,5 +1,16 @@
-/* rsHell — Modern Dark Theme */
-/* Terminal area is always dark. App chrome follows GTK theme (light/dark). */
+/* rsHell — Adaptive Theme */
+/* App chrome follows GTK theme (light/dark).                     */
+/* Terminal area, tab bar, status bar, right-click menu: always dark. */
+
+/* ── Window — remove CSD shadow/resize margin ──── */
+window {
+    box-shadow: none;
+}
+
+window.csd {
+    box-shadow: none;
+    margin: 0;
+}
 
 /* ── Accent Colors (shared) ──────────────────────── */
 .connect-button {
@@ -28,13 +39,14 @@
 /* ── HeaderBar / Toolbar ─────────────────────────── */
 headerbar {
     box-shadow: none;
-    min-height: 34px;
+    min-height: 36px;
     padding: 0 6px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    border-bottom: 1px solid alpha(@borders, 0.5);
 }
 
 headerbar button {
-    min-height: 24px;
+    min-height: 26px;
+    min-width: 26px;
     padding: 2px 8px;
     border-radius: 5px;
     font-size: 11px;
@@ -42,23 +54,24 @@ headerbar button {
 }
 
 headerbar button:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: alpha(@window_fg_color, 0.08);
 }
 
 headerbar button:active {
-    background: rgba(255, 255, 255, 0.04);
+    background: alpha(@window_fg_color, 0.04);
 }
 
-.toast-label {
-    font-size: 10px;
-    padding: 0 6px;
-    opacity: 0.55;
+/* Pane action buttons in headerbar — consistent icon sizing */
+.pane-action-btn {
+    min-height: 26px;
+    min-width: 26px;
+    padding: 4px;
 }
 
 /* ── Sidebar ─────────────────────────────────────── */
 .sidebar {
     padding: 0;
-    border-right: 1px solid rgba(255, 255, 255, 0.06);
+    border-right: 1px solid alpha(@borders, 0.5);
 }
 
 .sidebar-header {
@@ -84,7 +97,7 @@ headerbar button:active {
 }
 
 .sidebar-toolbar button:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: alpha(@window_fg_color, 0.08);
 }
 
 /* ── Connection List ─────────────────────────────── */
@@ -99,7 +112,7 @@ headerbar button:active {
 }
 
 .connection-list row:hover {
-    background: rgba(255, 255, 255, 0.04);
+    background: alpha(@window_fg_color, 0.04);
 }
 
 .connection-list row:selected {
@@ -130,32 +143,154 @@ headerbar button:active {
 }
 
 /* ── Editor / Settings Dialog ────────────────────── */
+.editor-dialog {
+    background: @window_bg_color;
+}
+
 .editor-group {
-    padding: 10px 14px;
+    padding: 10px 16px;
 }
 
 .editor-group label {
-    font-size: 10px;
-    margin-top: 3px;
-    opacity: 0.55;
+    font-size: 11px;
+    margin-top: 4px;
+    opacity: 0.7;
 }
 
-.editor-group entry,
-.editor-group spinbutton {
-    min-height: 28px;
-    border-radius: 5px;
+/* ── Global entry/spinbutton/password styling ────── */
+entry,
+spinbutton,
+passwordentry {
+    min-height: 30px;
+    border-radius: 4px;
     font-size: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid alpha(@borders, 0.8);
+    background: alpha(@view_bg_color, 0.6);
     transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 
-.editor-group entry:focus,
-.editor-group spinbutton:focus {
-    border-color: #60cdff;
-    box-shadow: 0 0 0 1px rgba(96, 205, 255, 0.25);
+entry:focus,
+spinbutton:focus,
+passwordentry:focus {
+    border-color: @accent_bg_color;
+    box-shadow: 0 0 0 1px alpha(@accent_bg_color, 0.3);
+    background: alpha(@view_bg_color, 0.8);
 }
 
-/* ── Tab Bar ─────────────────────────────────────── */
+entry:disabled,
+spinbutton:disabled,
+passwordentry:disabled {
+    opacity: 0.45;
+    border-color: alpha(@borders, 0.3);
+}
+
+/* ── Notebook (tabs inside dialogs) ──────────────── */
+.editor-dialog notebook > header {
+    background: transparent;
+    border-bottom: 1px solid alpha(@borders, 0.5);
+}
+
+.editor-dialog notebook > header tab {
+    padding: 4px 14px;
+    font-size: 11px;
+    border-radius: 0;
+    border-bottom: 2px solid transparent;
+    transition: border-color 120ms ease, color 120ms ease;
+}
+
+.editor-dialog notebook > header tab:checked {
+    border-bottom-color: @accent_bg_color;
+}
+
+.editor-dialog notebook > header tab:hover:not(:checked) {
+    background: alpha(@window_fg_color, 0.04);
+}
+
+/* ── Dialog Buttons ──────────────────────────────── */
+.editor-dialog button.suggested-action,
+.editor-dialog .connect-button {
+    min-height: 30px;
+    padding: 4px 20px;
+    font-size: 12px;
+}
+
+.editor-dialog button {
+    min-height: 28px;
+    padding: 4px 14px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+/* ── Drop Down (theme selector etc.) ─────────────── */
+dropdown {
+    min-height: 30px;
+    border: 1px solid alpha(@borders, 0.8);
+    border-radius: 4px;
+    background: alpha(@view_bg_color, 0.6);
+}
+
+dropdown:focus {
+    border-color: @accent_bg_color;
+}
+
+/* ── CheckButton ─────────────────────────────────── */
+checkbutton {
+    font-size: 11px;
+}
+
+checkbutton indicator {
+    border: 1px solid alpha(@borders, 1.0);
+    border-radius: 3px;
+    background: alpha(@view_bg_color, 0.4);
+}
+
+checkbutton:checked indicator {
+    background: @accent_bg_color;
+    border-color: @accent_bg_color;
+}
+
+/* ── TextView (notes field) ──────────────────────── */
+textview {
+    font-size: 12px;
+    padding: 4px 6px;
+}
+
+textview text {
+    background: alpha(@view_bg_color, 0.4);
+}
+
+/* ── ScrolledWindow border inside editors ────────── */
+scrolledwindow {
+    border: 1px solid alpha(@borders, 0.6);
+    border-radius: 4px;
+}
+
+/* Don't add border to terminal/sidebar scrolls */
+.terminal-container scrolledwindow,
+.sidebar scrolledwindow,
+.connection-list scrolledwindow {
+    border: none;
+    border-radius: 0;
+}
+
+/* ── Paned Separators ────────────────────────────── */
+paned > separator {
+    min-width: 2px;
+    min-height: 2px;
+    background: alpha(@borders, 0.3);
+    transition: background 150ms ease;
+}
+
+paned > separator:hover {
+    background: alpha(@accent_bg_color, 0.55);
+}
+
+/* ══════════════════════════════════════════════════ */
+/* ── ALWAYS-DARK ZONES: Tab Bar, Terminal, Status ── */
+/* These do NOT adapt to light theme — always dark.  */
+/* ══════════════════════════════════════════════════ */
+
+/* ── Tab Bar (always dark) ───────────────────────── */
 .tab-bar {
     background: #1e1e1e;
     padding: 0 2px;
@@ -232,7 +367,7 @@ headerbar button:active {
     background: #1a1a1a;
 }
 
-/* ── Status Bar ──────────────────────────────────── */
+/* ── Status Bar (always dark / accent) ───────────── */
 .status-bar {
     background: #0078d4;
     padding: 0 10px;
@@ -245,19 +380,7 @@ headerbar button:active {
     font-weight: 500;
 }
 
-/* ── Paned Separators ────────────────────────────── */
-paned > separator {
-    min-width: 2px;
-    min-height: 2px;
-    background: rgba(255, 255, 255, 0.04);
-    transition: background 150ms ease;
-}
-
-paned > separator:hover {
-    background: rgba(96, 205, 255, 0.45);
-}
-
-/* ── Scrollbar (terminal area) ───────────────────── */
+/* ── Scrollbar (terminal area — always dark) ─────── */
 .terminal-container scrollbar {
     background: transparent;
 }
@@ -278,29 +401,39 @@ paned > separator:hover {
     background: rgba(255, 255, 255, 0.30);
 }
 
-/* ── CheckButton ─────────────────────────────────── */
-checkbutton {
-    font-size: 11px;
-}
-
 /* ── Placeholder ─────────────────────────────────── */
 .dim-label {
     opacity: 0.4;
 }
 
-/* ── Right-Click Context Menu (Windows 10 Classic) ─ */
-/* Override GTK4 popover to achieve flat, sharp-cornered,
-   compact menu style like Windows 10 traditional context menu */
+/* ── Grid labels in dialogs ──────────────────────── */
+.editor-dialog grid > label {
+    font-size: 11px;
+    opacity: 0.75;
+}
 
-popover.menu {
+/* ── Separator in dialogs ────────────────────────── */
+.editor-dialog separator {
+    background: alpha(@borders, 0.4);
+    min-height: 1px;
+}
+
+/* ══════════════════════════════════════════════════ */
+/* ── Right-Click Context Menu (Windows 10 Classic) ─ */
+/* Always dark — overlays terminal area.             */
+/* ══════════════════════════════════════════════════ */
+
+popover.menu,
+menubutton > popover.menu {
     background: #2b2b2b;
     border: 1px solid #5a5a5a;
     border-radius: 0;
-    box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.50);
+    box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.55);
     padding: 2px 0;
 }
 
-popover.menu > contents {
+popover.menu > contents,
+menubutton > popover.menu > contents {
     background: transparent;
     border-radius: 0;
     padding: 2px 0;
@@ -317,10 +450,10 @@ popover.menu arrow {
 
 popover.menu modelbutton {
     font-size: 12px;
-    min-height: 24px;
-    padding: 2px 24px 2px 28px;
+    min-height: 26px;
+    padding: 3px 24px 3px 28px;
     border-radius: 0;
-    color: #e8e8e8;
+    color: #e0e0e0;
     transition: none;
 }
 
@@ -361,21 +494,4 @@ popover.menu accelerator {
 
 popover.menu modelbutton:hover accelerator {
     color: rgba(255, 255, 255, 0.8);
-}
-
-/* ── HeaderBar Menu Popover (same Windows 10 style) ─ */
-menubutton > popover.menu {
-    background: #2b2b2b;
-    border: 1px solid #5a5a5a;
-    border-radius: 0;
-    box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.50);
-    padding: 2px 0;
-}
-
-menubutton > popover.menu > contents {
-    background: transparent;
-    border-radius: 0;
-    padding: 2px 0;
-    border: none;
-    box-shadow: none;
 }

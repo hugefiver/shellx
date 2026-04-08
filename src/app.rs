@@ -1,5 +1,5 @@
 use crate::config::{
-    AppTheme, BackspaceKeyMode, DeleteKeyMode, GlobalConfig, ResolvedTerminalSettings,
+    AppTheme, BackspaceKeyMode, ColorScheme, DeleteKeyMode, GlobalConfig, ResolvedTerminalSettings,
     SettingsRepository, TerminalSettings, TERMINAL_TYPES,
 };
 use crate::connection::{
@@ -88,10 +88,25 @@ impl TerminalGroup {
     }
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
 struct CellCoord {
     col: usize,
     row: usize,
+}
+
+/// Metadata returned from draw_terminal_full describing what was actually rendered.
+/// Used as the authoritative cache key so cached surface always matches rendered content.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct FrameMeta {
+    seqno: usize,
+    rows: usize,
+    cols: usize,
+    scrollback_rows: usize,
+    cursor_x: usize,
+    cursor_y: usize,
+    cursor_shape: CursorShape,
+    cursor_visible: bool,
+    blink_visible: bool,
 }
 
 struct PaneRenderState {
@@ -99,6 +114,12 @@ struct PaneRenderState {
     cell_height: f64,
     selection: Option<(CellCoord, CellCoord)>,
     image_cache: HashMap<[u8; 32], gtk::cairo::ImageSurface>,
+    image_cache_order: Vec<[u8; 32]>,
+    cached_frame: Option<FrameMeta>,
+    cached_surface: Option<gtk::cairo::ImageSurface>,
+    cached_dims: (i32, i32),
+    cached_scale: f64,
+    cached_selection: Option<(CellCoord, CellCoord)>,
 }
 
 impl Default for PaneRenderState {
@@ -108,6 +129,12 @@ impl Default for PaneRenderState {
             cell_height: 0.0,
             selection: None,
             image_cache: HashMap::new(),
+            image_cache_order: Vec::new(),
+            cached_frame: None,
+            cached_surface: None,
+            cached_dims: (0, 0),
+            cached_scale: 1.0,
+            cached_selection: None,
         }
     }
 }
@@ -141,6 +168,7 @@ impl PaneRenderState {
 
 struct TerminalSettingsWidgets {
     terminal_type: gtk::DropDown,
+    color_scheme: gtk::DropDown,
     cols: gtk::SpinButton,
     rows: gtk::SpinButton,
     scrollback: gtk::SpinButton,
@@ -170,6 +198,10 @@ fn build_terminal_settings_notebook() -> (gtk::Notebook, TerminalSettingsWidgets
     let term_type_list = gtk::StringList::new(TERMINAL_TYPES);
     let terminal_type = gtk::DropDown::new(Some(term_type_list), gtk::Expression::NONE);
     terminal_type.set_hexpand(true);
+    let scheme_labels: Vec<&str> = ColorScheme::ALL.iter().map(|s| s.label()).collect();
+    let scheme_list = gtk::StringList::new(&scheme_labels);
+    let color_scheme = gtk::DropDown::new(Some(scheme_list), gtk::Expression::NONE);
+    color_scheme.set_hexpand(true);
     let cols = gtk::SpinButton::with_range(1.0, 999.0, 1.0);
     cols.set_width_chars(5);
     let rows = gtk::SpinButton::with_range(1.0, 999.0, 1.0);
@@ -183,6 +215,11 @@ fn build_terminal_settings_notebook() -> (gtk::Notebook, TerminalSettingsWidgets
     lbl.set_halign(gtk::Align::End);
     general.attach(&lbl, 0, row, 1, 1);
     general.attach(&terminal_type, 1, row, 3, 1);
+    row += 1;
+    let lbl = gtk::Label::new(Some("Color Scheme"));
+    lbl.set_halign(gtk::Align::End);
+    general.attach(&lbl, 0, row, 1, 1);
+    general.attach(&color_scheme, 1, row, 3, 1);
     row += 1;
     let lbl = gtk::Label::new(Some("Columns"));
     lbl.set_halign(gtk::Align::End);
@@ -333,6 +370,7 @@ fn build_terminal_settings_notebook() -> (gtk::Notebook, TerminalSettingsWidgets
 
     let widgets = TerminalSettingsWidgets {
         terminal_type,
+        color_scheme,
         cols,
         rows,
         scrollback,
@@ -368,6 +406,18 @@ fn connect_terminal_settings_signals<F>(
                 && let Some(name) = TERMINAL_TYPES.get(idx as usize)
             {
                 s.input(f(TerminalSettingChange::TerminalType(name.to_string())));
+            }
+        });
+    }
+    {
+        let s = sender.clone();
+        let f = wrap.clone();
+        w.color_scheme.connect_selected_notify(move |dd| {
+            let idx = dd.selected();
+            if idx != gtk::INVALID_LIST_POSITION
+                && let Some(&scheme) = ColorScheme::ALL.get(idx as usize)
+            {
+                s.input(f(TerminalSettingChange::ColorScheme(scheme)));
             }
         });
     }
@@ -446,6 +496,11 @@ fn populate_terminal_settings(w: &TerminalSettingsWidgets, resolved: &ResolvedTe
         .position(|t| *t == resolved.terminal_type)
         .unwrap_or(0);
     w.terminal_type.set_selected(type_idx as u32);
+    let scheme_idx = ColorScheme::ALL
+        .iter()
+        .position(|s| *s == resolved.color_scheme)
+        .unwrap_or(0);
+    w.color_scheme.set_selected(scheme_idx as u32);
     w.cols.set_value(resolved.initial_cols as f64);
     w.rows.set_value(resolved.initial_rows as f64);
     w.scrollback.set_value(resolved.scrollback_lines as f64);
@@ -536,6 +591,7 @@ pub enum AppMsg {
 #[derive(Debug)]
 pub enum TerminalSettingChange {
     TerminalType(String),
+    ColorScheme(ColorScheme),
     Cols(u16),
     Rows(u16),
     ScrollbackLines(usize),
@@ -653,7 +709,7 @@ pub struct AppWidgets {
     pane_views: Vec<gtk::DrawingArea>,
     pane_sizes: Vec<(u16, u16)>,
     status_label: gtk::Label,
-    toast_label: gtk::Label,
+
 }
 
 impl RshellApp {
@@ -1077,6 +1133,7 @@ impl RshellApp {
                     let t = &mut self.draft.terminal;
                     match change {
                         TerminalSettingChange::TerminalType(v) => t.terminal_type = Some(v),
+                        TerminalSettingChange::ColorScheme(v) => t.color_scheme = Some(v),
                         TerminalSettingChange::Cols(v) => t.initial_cols = Some(v),
                         TerminalSettingChange::Rows(v) => t.initial_rows = Some(v),
                         TerminalSettingChange::ScrollbackLines(v) => t.scrollback_lines = Some(v),
@@ -1099,6 +1156,7 @@ impl RshellApp {
                     let t = &mut self.global_config.terminal;
                     match change {
                         TerminalSettingChange::TerminalType(v) => t.terminal_type = Some(v),
+                        TerminalSettingChange::ColorScheme(v) => t.color_scheme = Some(v),
                         TerminalSettingChange::Cols(v) => t.initial_cols = Some(v),
                         TerminalSettingChange::Rows(v) => t.initial_rows = Some(v),
                         TerminalSettingChange::ScrollbackLines(v) => t.scrollback_lines = Some(v),
@@ -1138,7 +1196,6 @@ impl RshellApp {
     }
 
     fn view_impl(&self, widgets: &mut AppWidgets, sender: ComponentSender<Self>) {
-        widgets.toast_label.set_label(&self.toast);
         widgets
             .sidebar_revealer
             .set_visible(self.sidebar_visible);
@@ -1503,15 +1560,126 @@ fn draw_terminal(
     cr: &gtk::cairo::Context,
     width: i32,
     height: i32,
+    scale: f64,
     render_state: &Rc<RefCell<PaneRenderState>>,
 ) {
-    let Some((rows, cols, cursor_x, cursor_y, cursor_shape, cursor_vis, _palette_fg, palette_bg, cursor_bg_color, lines_data, image_cells)) =
+    let blink_visible = {
+        let epoch_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis();
+        (epoch_ms / 530).is_multiple_of(2)
+    };
+
+    let quick_meta = handle.with_terminal(|terminal| {
+        let cursor = terminal.cursor_pos();
+        let screen = terminal.screen();
+        FrameMeta {
+            seqno: terminal.current_seqno(),
+            rows: screen.physical_rows,
+            cols: screen.physical_cols,
+            scrollback_rows: screen.scrollback_rows(),
+            cursor_x: cursor.x,
+            cursor_y: cursor.y as usize,
+            cursor_shape: cursor.shape,
+            cursor_visible: cursor.visibility == CursorVisibility::Visible,
+            blink_visible,
+        }
+    });
+
+    let Some(quick_meta) = quick_meta else {
+        cr.set_source_rgb(0.11, 0.11, 0.14);
+        let _ = cr.paint();
+        return;
+    };
+
+    {
+        let rs = render_state.borrow();
+        let current_sel = rs.normalized_selection();
+        if rs.cached_dims == (width, height)
+            && rs.cached_scale == scale
+            && rs.cached_selection == current_sel
+            && rs.cached_frame == Some(quick_meta)
+            && let Some(ref surface) = rs.cached_surface
+        {
+            let _ = cr.set_source_surface(surface, 0.0, 0.0);
+            let _ = cr.paint();
+            return;
+        }
+    }
+
+    let can_reuse = {
+        let rs = render_state.borrow();
+        rs.cached_dims == (width, height) && rs.cached_scale == scale && rs.cached_surface.is_some()
+    };
+
+    let surface = if can_reuse {
+        let mut rs = render_state.borrow_mut();
+        rs.cached_surface.take().unwrap()
+    } else {
+        let phys_w = (width as f64 * scale).ceil() as i32;
+        let phys_h = (height as f64 * scale).ceil() as i32;
+        match gtk::cairo::ImageSurface::create(gtk::cairo::Format::ARgb32, phys_w, phys_h) {
+            Ok(s) => {
+                s.set_device_scale(scale, scale);
+                s
+            }
+            Err(_) => {
+                let meta = draw_terminal_full(handle, cr, width, height, render_state, blink_visible);
+                let mut rs = render_state.borrow_mut();
+                rs.cached_frame = meta;
+                rs.cached_dims = (width, height);
+                rs.cached_scale = scale;
+                rs.cached_selection = rs.normalized_selection();
+                rs.cached_surface = None;
+                return;
+            }
+        }
+    };
+
+    let Ok(cache_cr) = gtk::cairo::Context::new(&surface) else {
+        let meta = draw_terminal_full(handle, cr, width, height, render_state, blink_visible);
+        let mut rs = render_state.borrow_mut();
+        rs.cached_frame = meta;
+        rs.cached_dims = (width, height);
+        rs.cached_scale = scale;
+        rs.cached_selection = rs.normalized_selection();
+        rs.cached_surface = None;
+        return;
+    };
+
+    let meta = draw_terminal_full(handle, &cache_cr, width, height, render_state, blink_visible);
+    drop(cache_cr);
+
+    let _ = cr.set_source_surface(&surface, 0.0, 0.0);
+    let _ = cr.paint();
+
+    {
+        let mut rs = render_state.borrow_mut();
+        rs.cached_frame = meta;
+        rs.cached_dims = (width, height);
+        rs.cached_scale = scale;
+        rs.cached_selection = rs.normalized_selection();
+        rs.cached_surface = Some(surface);
+    }
+}
+
+fn draw_terminal_full(
+    handle: &TerminalSessionHandle,
+    cr: &gtk::cairo::Context,
+    width: i32,
+    height: i32,
+    render_state: &Rc<RefCell<PaneRenderState>>,
+    blink_visible: bool,
+) -> Option<FrameMeta> {
+    let Some((seqno, rows, cols, scrollback_total, cursor_x, cursor_y, cursor_shape, cursor_vis, _palette_fg, palette_bg, cursor_bg_color, lines_data, image_cells)) =
         handle.with_terminal(|terminal| {
             let screen = terminal.screen();
             let palette = terminal.palette();
             let cursor = terminal.cursor_pos();
             let phys_rows = screen.physical_rows;
             let phys_cols = screen.physical_cols;
+            let seqno = terminal.current_seqno();
 
             let palette_fg = palette.foreground;
             let palette_bg = palette.background;
@@ -1590,8 +1758,10 @@ fn draw_terminal(
             });
 
             (
+                seqno,
                 phys_rows,
                 phys_cols,
+                total,
                 cursor.x,
                 cursor.y as usize,
                 cursor.shape,
@@ -1606,14 +1776,14 @@ fn draw_terminal(
     else {
         cr.set_source_rgb(0.11, 0.11, 0.14);
         let _ = cr.paint();
-        return;
+        return None;
     };
 
     let pad = 4.0_f64;
 
     let mut font_opts = gtk::cairo::FontOptions::new().unwrap();
     font_opts.set_antialias(gtk::cairo::Antialias::Subpixel);
-    font_opts.set_hint_style(gtk::cairo::HintStyle::Full);
+    font_opts.set_hint_style(gtk::cairo::HintStyle::Slight);
     font_opts.set_hint_metrics(gtk::cairo::HintMetrics::On);
     font_opts.set_subpixel_order(gtk::cairo::SubpixelOrder::Rgb);
 
@@ -1713,9 +1883,10 @@ fn draw_terminal(
 
     if !image_cells.is_empty() {
         let mut rs = render_state.borrow_mut();
+        const IMAGE_CACHE_MAX: usize = 64;
         for &(row, col, cw, tl_x, tl_y, br_x, br_y, _z_index, pl, pt, pr, pb, ref img_data) in &image_cells {
             let hash = img_data.hash();
-            let surface = rs.image_cache.entry(hash).or_insert_with(|| {
+            if let std::collections::hash_map::Entry::Vacant(e) = rs.image_cache.entry(hash) {
                 let data_guard = img_data.data();
                 let (rgba, iw, ih) = match &*data_guard {
                     ImageDataType::Rgba8 { data, width, height, .. } => {
@@ -1725,15 +1896,26 @@ fn draw_terminal(
                         if let Some(frame) = frames.first() {
                             (frame.as_slice(), *width, *height)
                         } else {
-                            return cairo_fallback_surface();
+                            (&[][..], 0u32, 0u32)
                         }
                     }
-                    _ => {
-                        return cairo_fallback_surface();
-                    }
+                    _ => (&[][..], 0u32, 0u32),
                 };
-                rgba_to_cairo_surface(rgba, iw, ih)
-            });
+                let surface = if iw > 0 && ih > 0 {
+                    rgba_to_cairo_surface(rgba, iw, ih)
+                } else {
+                    cairo_fallback_surface()
+                };
+                e.insert(surface);
+                rs.image_cache_order.push(hash);
+                while rs.image_cache_order.len() > IMAGE_CACHE_MAX {
+                    let old = rs.image_cache_order.remove(0);
+                    rs.image_cache.remove(&old);
+                }
+            }
+            let Some(surface) = rs.image_cache.get(&hash) else {
+                continue;
+            };
 
             let dest_x = col as f64 * cell_w + pl as f64;
             let dest_y = row as f64 * cell_h + pt as f64;
@@ -1803,17 +1985,9 @@ fn draw_terminal(
                 | CursorShape::BlinkingUnderline
                 | CursorShape::BlinkingBar
         );
-        let blink_visible = if is_blinking {
-            let epoch_ms = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis();
-            (epoch_ms / 530) % 2 == 0
-        } else {
-            true
-        };
+        let show_cursor = if is_blinking { blink_visible } else { true };
 
-        if blink_visible {
+        if show_cursor {
             let cx = cursor_x as f64 * cell_w;
             let cy = cursor_y as f64 * cell_h;
 
@@ -1855,6 +2029,18 @@ fn draw_terminal(
     }
 
     let _ = cr.restore();
+
+    Some(FrameMeta {
+        seqno,
+        rows,
+        cols,
+        scrollback_rows: scrollback_total,
+        cursor_x,
+        cursor_y,
+        cursor_shape,
+        cursor_visible: cursor_vis == CursorVisibility::Visible,
+        blink_visible,
+    })
 }
 
 fn extract_selection_text(
@@ -1969,8 +2155,9 @@ fn build_pane_view(
 
     let draw_handle = handle.clone();
     let rs_draw = render_state.clone();
-    area.set_draw_func(move |_area, cr, w, h| {
-        draw_terminal(&draw_handle, cr, w, h, &rs_draw);
+    area.set_draw_func(move |area, cr, w, h| {
+        let scale = area.scale_factor() as f64;
+        draw_terminal(&draw_handle, cr, w, h, scale, &rs_draw);
     });
 
     let s = sender.clone();
@@ -2114,6 +2301,7 @@ fn build_pane_view(
     area.add_controller(drag);
 
     let scroll_handle = handle.clone();
+    let rs_scroll = render_state.clone();
     let scroll = gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL);
     scroll.connect_scroll(move |_, _dx, dy| {
         let button = if dy < 0.0 {
@@ -2131,6 +2319,7 @@ fn build_pane_view(
             modifiers: KeyModifiers::NONE,
         };
         let _ = scroll_handle.with_terminal_mut(|t| t.mouse_event(event));
+        rs_scroll.borrow_mut().cached_frame = None;
         glib::Propagation::Stop
     });
     area.add_controller(scroll);
@@ -2753,19 +2942,21 @@ impl SimpleComponent for RshellApp {
         sep1.set_margin_start(4);
         sep1.set_margin_end(4);
 
-        let split_h_btn = gtk::Button::with_label("H-Split");
-        let split_v_btn = gtk::Button::with_label("V-Split");
-        let close_pane_btn = gtk::Button::with_label("Close Pane");
-
-        let toast_label = gtk::Label::new(None);
-        toast_label.add_css_class("toast-label");
+        let split_h_btn = gtk::Button::from_icon_name("object-flip-horizontal-symbolic");
+        split_h_btn.set_tooltip_text(Some("Horizontal Split"));
+        split_h_btn.add_css_class("pane-action-btn");
+        let split_v_btn = gtk::Button::from_icon_name("object-flip-vertical-symbolic");
+        split_v_btn.set_tooltip_text(Some("Vertical Split"));
+        split_v_btn.add_css_class("pane-action-btn");
+        let close_pane_btn = gtk::Button::from_icon_name("window-close-symbolic");
+        close_pane_btn.set_tooltip_text(Some("Close Pane"));
+        close_pane_btn.add_css_class("pane-action-btn");
 
         let title_label = gtk::Label::new(Some("rsHell"));
         title_label.add_css_class("title");
         let title_box = gtk::CenterBox::new();
         title_box.set_hexpand(true);
         title_box.set_center_widget(Some(&title_label));
-        title_box.set_end_widget(Some(&toast_label));
 
         header_bar.pack_start(&menu_btn);
         header_bar.pack_start(&connect_btn);
@@ -3365,7 +3556,7 @@ impl SimpleComponent for RshellApp {
             pane_views: Vec::new(),
             pane_sizes: Vec::new(),
             status_label,
-            toast_label,
+
         };
 
         let mut parts = ComponentParts { model, widgets };
